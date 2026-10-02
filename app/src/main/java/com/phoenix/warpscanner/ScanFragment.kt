@@ -87,14 +87,15 @@ class ScanFragment : Fragment() {
         engine.scan(
             ScanHelper.quickScanArgs(selectedPorts(), target),
             onResult = { r ->
-                if (!ScanHelper.isStable(r)) return@scan
-                val key = r.endpoint
-                activity?.runOnUiThread {
-                    if (seen.add(key)) {
-                        results.add(r)
-                        ScanHelper.sortByMs(results)
-                        adapter.items = results.toList()
-                        tvCount.text = "ရလဒ် (${results.size}) — ms အနိမ့်ဆုံးအပေါ်"
+                if (ScanHelper.isStable(r)) {
+                    val key = r.endpoint
+                    activity?.runOnUiThread {
+                        if (seen.add(key)) {
+                            results.add(r)
+                            ScanHelper.sortByMs(results)
+                            adapter.items = results.toList()
+                            tvCount.text = "ရလဒ် (${results.size}) — ms အနိမ့်ဆုံးအပေါ်"
+                        }
                     }
                 }
             },
@@ -123,11 +124,12 @@ class ScanFragment : Fragment() {
         engine.scan(
             ScanHelper.rangeScanArgs(cidr, selectedPorts(), 30),
             onResult = { hit ->
-                if (!ScanHelper.isStable(hit)) return@scan
-                BackupStore.add(
-                    requireContext(),
-                    BackupEntry(hit.ip, hit.port, hit.latencyMs, System.currentTimeMillis())
-                )
+                if (ScanHelper.isStable(hit)) {
+                    BackupStore.add(
+                        requireContext(),
+                        BackupEntry(hit.ip, hit.port, hit.latencyMs, System.currentTimeMillis())
+                    )
+                }
             },
             onProgress = {},
             onDone = { ok, err ->

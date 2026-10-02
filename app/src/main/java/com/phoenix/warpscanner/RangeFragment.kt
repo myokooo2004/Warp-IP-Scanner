@@ -53,14 +53,15 @@ class RangeFragment : Fragment() {
             engine.scan(
                 ScanHelper.rangeScanArgs(cidrs, ports, 50),
                 onResult = { r ->
-                    if (!ScanHelper.isStable(r)) return@scan
-                    BackupStore.add(
-                        requireContext(),
-                        BackupEntry(r.ip, r.port, r.latencyMs, System.currentTimeMillis())
-                    )
-                    added++
-                    activity?.runOnUiThread {
-                        tvProgress.text = "တွေ့ပြီ $added ခု (backup ထဲသိမ်းနေတယ်…)"
+                    if (ScanHelper.isStable(r)) {
+                        BackupStore.add(
+                            requireContext(),
+                            BackupEntry(r.ip, r.port, r.latencyMs, System.currentTimeMillis())
+                        )
+                        added++
+                        activity?.runOnUiThread {
+                            tvProgress.text = "တွေ့ပြီ $added ခု (backup ထဲသိမ်းနေတယ်…)"
+                        }
                     }
                 },
                 onProgress = { msg ->

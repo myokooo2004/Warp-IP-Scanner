@@ -5,7 +5,7 @@
         <item name="colorOnPrimary">#0A0A0B</item>
         <item name="android:windowBackground">@color/bg</item>
         <item name="android:textColor">@color/text</item>
-        <item name="bottomNavigationViewStyle">@style/Widget.WarpScanner.BottomNav</item>
+        <item name="bottomNavigationStyle">@style/Widget.WarpScanner.BottomNav</item>
     </style>
 
     <style name="Widget.WarpScanner.BottomNav" parent="Widget.MaterialComponents.BottomNavigationView.Colored">
