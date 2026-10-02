@@ -13,6 +13,14 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        ndk { abiFilters += "arm64-v8a" }
+    }
+
+    packaging {
+        // Extract native libs at install so the bundled scanner engine
+        // (jniLibs/arm64-v8a/libcf-scanner.so) can be executed from
+        // applicationInfo.nativeLibraryDir.
+        jniLibs { useLegacyPackaging = true }
     }
 
     signingConfigs {

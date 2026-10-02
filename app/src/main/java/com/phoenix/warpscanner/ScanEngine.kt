@@ -17,26 +17,21 @@ class ScanEngine(private val ctx: Context) {
     var running = false
         private set
 
-    /** Copy the engine binary from assets to a private executable location. */
+    /**
+     * The engine ships as a native library (jniLibs/arm64-v8a/libcf-scanner.so)
+     * so it lands in applicationInfo.nativeLibraryDir at install time —
+     * the one place Android reliably allows executing bundled binaries.
+     * (Executing from the app's private files dir fails with EACCES on
+     * modern Android.)
+     */
     fun ensureBinary(): File {
-        val binDir = File(ctx.filesDir, "bin")
-        if (!binDir.exists()) binDir.mkdirs()
-        val bin = File(binDir, "cf-scanner")
-        if (!bin.exists() || bin.length() == 0L) {
-            try {
-                ctx.assets.open("cf-scanner").use { input ->
-                    bin.outputStream().use { output -> input.copyTo(output) }
-                }
-            } catch (e: Exception) {
-                throw IllegalStateException("engine မပါဘူး — APK အသစ်ပြန် install လုပ်ပါ")
-            }
+        val libFile = File(ctx.applicationInfo.nativeLibraryDir, "libcf-scanner.so")
+        if (!libFile.exists() || libFile.length() == 0L) {
+            val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
+            throw IllegalStateException("engine not found for this device ABI ($abi)")
         }
-        bin.setExecutable(true)
-        try {
-            Runtime.getRuntime().exec(arrayOf("chmod", "755", bin.absolutePath)).waitFor()
-        } catch (_: Exception) { /* setExecutable already tried */ }
-        if (!bin.canExecute()) throw IllegalStateException("engine binary is not executable")
-        return bin
+        try { libFile.setExecutable(true) } catch (_: Exception) { /* already executable */ }
+        return libFile
     }
 
     fun cancel() {
