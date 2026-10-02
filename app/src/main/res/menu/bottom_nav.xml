@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_scan"
+        android:title="စကင်"
+        android:icon="@android:drawable/ic_menu_search" />
+    <item
+        android:id="@+id/nav_range"
+        android:title="Range"
+        android:icon="@android:drawable/ic_menu_dialpad" />
+    <item
+        android:id="@+id/nav_backup"
+        android:title="Backup"
+        android:icon="@android:drawable/ic_menu_save" />
+</menu>
