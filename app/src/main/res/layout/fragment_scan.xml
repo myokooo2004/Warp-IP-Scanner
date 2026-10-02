@@ -108,6 +108,34 @@
             android:textColor="@color/gray"
             android:textSize="12sp" />
 
+        <Button
+            android:id="@+id/btnLogToggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Log ပြမယ်"
+            android:textColor="@color/yellow"
+            android:textSize="12sp" />
+
+        <ScrollView
+            android:id="@+id/svLog"
+            android:layout_width="match_parent"
+            android:layout_height="150dp"
+            android:layout_marginTop="6dp"
+            android:background="@color/card"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvLog"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:padding="8dp"
+                android:text=""
+                android:textColor="@color/gray"
+                android:textSize="11sp" />
+        </ScrollView>
+
         <TextView
             android:id="@+id/tvCount"
             android:layout_width="match_parent"

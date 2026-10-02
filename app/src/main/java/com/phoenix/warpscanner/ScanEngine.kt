@@ -23,8 +23,12 @@ class ScanEngine(private val ctx: Context) {
         if (!binDir.exists()) binDir.mkdirs()
         val bin = File(binDir, "cf-scanner")
         if (!bin.exists() || bin.length() == 0L) {
-            ctx.assets.open("cf-scanner").use { input ->
-                bin.outputStream().use { output -> input.copyTo(output) }
+            try {
+                ctx.assets.open("cf-scanner").use { input ->
+                    bin.outputStream().use { output -> input.copyTo(output) }
+                }
+            } catch (e: Exception) {
+                throw IllegalStateException("engine မပါဘူး — APK အသစ်ပြန် install လုပ်ပါ")
             }
         }
         bin.setExecutable(true)
