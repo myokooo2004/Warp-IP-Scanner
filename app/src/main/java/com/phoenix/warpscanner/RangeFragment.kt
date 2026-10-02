@@ -37,18 +37,18 @@ class RangeFragment : Fragment() {
         btnScan.setOnClickListener {
             if (engine.running) {
                 engine.cancel()
-                btnScan.text = "Range စမယ်"
+                btnScan.text = "Scan range"
                 return@setOnClickListener
             }
             val cidrs = etCidrs.text.toString().trim()
             if (cidrs.isEmpty()) {
-                toast("CIDR ရိုက်ပါ (ဥပမာ 8.34.146.0/24)")
+                toast("Enter a CIDR (e.g. 8.34.146.0/24)")
                 return@setOnClickListener
             }
             val ports = etPorts.text.toString().trim().ifEmpty { "500" }
             added = 0
-            btnScan.text = "■ ရပ်"
-            tvProgress.text = "စတင်နေတယ်…"
+            btnScan.text = "■ Stop"
+            tvProgress.text = "Starting…"
 
             engine.scan(
                 ScanHelper.rangeScanArgs(cidrs, ports, 50),
@@ -60,7 +60,7 @@ class RangeFragment : Fragment() {
                         )
                         added++
                         activity?.runOnUiThread {
-                            tvProgress.text = "တွေ့ပြီ $added ခု (backup ထဲသိမ်းနေတယ်…)"
+                            tvProgress.text = "Found $added — saving to Backup…"
                         }
                     }
                 },
@@ -69,9 +69,9 @@ class RangeFragment : Fragment() {
                 },
                 onDone = { ok, err ->
                     activity?.runOnUiThread {
-                        btnScan.text = "Range စမယ်"
-                        if (!ok) toast("အမှား: ${err ?: "unknown"}")
-                        else toast("ပြီးပြီ — backup ထဲ $added ခု ပေါင်းထည့်ပြီးပြီ")
+                        btnScan.text = "Scan range"
+                        if (!ok) toast("Error: ${err ?: "unknown"}")
+                        else toast("Done — added $added to Backup")
                     }
                 }
             )

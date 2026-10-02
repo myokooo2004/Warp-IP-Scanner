@@ -2,7 +2,7 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/nav_scan"
-        android:title="စကင်"
+        android:title="Scan"
         android:icon="@drawable/ic_nav_scan" />
     <item
         android:id="@+id/nav_range"

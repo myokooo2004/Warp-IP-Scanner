@@ -48,7 +48,7 @@
         android:layout_marginStart="6dp"
         android:backgroundTint="@color/bg"
         android:text="⧉"
-        android:textColor="@color/yellow"
+        android:textColor="@color/accent"
         android:textSize="14sp" />
 
     <Button
@@ -58,6 +58,6 @@
         android:layout_marginStart="4dp"
         android:backgroundTint="@color/bg"
         android:text="/24"
-        android:textColor="@color/yellow"
+        android:textColor="@color/accent"
         android:textSize="12sp" />
 </LinearLayout>

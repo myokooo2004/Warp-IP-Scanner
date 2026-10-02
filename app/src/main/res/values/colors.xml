@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#0A0A0B</color>
-    <color name="card">#141416</color>
-    <color name="yellow">#FFC400</color>
-    <color name="text">#EDEDED</color>
-    <color name="gray">#9A9A9E</color>
+    <color name="bg">#0F1113</color>
+    <color name="card">#1A1D21</color>
+    <color name="accent">#4A90D9</color>
+    <color name="text">#EDEFF2</color>
+    <color name="gray">#9AA0A8</color>
     <color name="green">#4CAF50</color>
 </resources>

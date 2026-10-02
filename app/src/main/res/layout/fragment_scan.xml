@@ -15,7 +15,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="🐝 WARP IP Scanner"
-            android:textColor="@color/yellow"
+            android:textColor="@color/accent"
             android:textSize="20sp"
             android:textStyle="bold" />
 
@@ -25,8 +25,8 @@
             android:layout_marginTop="10dp"
             android:background="@drawable/warn_bg"
             android:padding="10dp"
-            android:text="⚠️ VPN အကုန်ပိတ်ပြီး mobile data နဲ့စစ်ပါ"
-            android:textColor="@color/yellow"
+            android:text="⚠️ Turn off all VPNs and scan on mobile data"
+            android:textColor="@color/accent"
             android:textSize="12sp" />
 
         <TextView
@@ -55,7 +55,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="အများဆုံး "
+                android:text="Max"
                 android:textColor="@color/text"
                 android:textSize="13sp" />
 
@@ -74,7 +74,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
-                android:text="ခု"
+                
                 android:textColor="@color/gray"
                 android:textSize="13sp" />
         </LinearLayout>
@@ -84,9 +84,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:backgroundTint="@color/yellow"
-            android:text="SCAN စမယ်"
-            android:textColor="#0A0A0B"
+            android:backgroundTint="@color/accent"
+            android:text="SCAN"
+            android:textColor="#FFFFFF"
             android:textSize="16sp"
             android:textStyle="bold" />
 
@@ -113,8 +113,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Log ပြမယ်"
-            android:textColor="@color/yellow"
+            android:text="Show log"
+            android:textColor="@color/accent"
             android:textSize="12sp" />
 
         <ScrollView
@@ -141,8 +141,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:text="ရလဒ် (0)"
-            android:textColor="@color/yellow"
+            android:text="Results (0)"
+            android:textColor="@color/accent"
             android:textSize="14sp"
             android:textStyle="bold" />
 

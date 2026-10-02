@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.WarpScanner" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/yellow</item>
-        <item name="colorOnPrimary">#0A0A0B</item>
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
         <item name="android:windowBackground">@color/bg</item>
         <item name="android:textColor">@color/text</item>
         <item name="bottomNavigationStyle">@style/Widget.WarpScanner.BottomNav</item>
@@ -10,7 +10,7 @@
 
     <style name="Widget.WarpScanner.BottomNav" parent="Widget.MaterialComponents.BottomNavigationView.Colored">
         <item name="backgroundTint">@color/card</item>
-        <item name="itemIconTint">@color/yellow</item>
+        <item name="itemIconTint">@color/accent</item>
         <item name="itemTextColor">@color/text</item>
     </style>
 </resources>

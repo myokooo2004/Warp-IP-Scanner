@@ -14,7 +14,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Range Scan"
-            android:textColor="@color/yellow"
+            android:textColor="@color/accent"
             android:textSize="20sp"
             android:textStyle="bold" />
 
@@ -22,7 +22,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="CIDR ရိုက်ပြီး စစ် — တွေ့တာတွေ backup list ထဲသိမ်းမယ်"
+            android:text="Enter CIDRs — found endpoints go to the backup list"
             android:textColor="@color/gray"
             android:textSize="12sp" />
 
@@ -72,9 +72,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:backgroundTint="@color/yellow"
+            android:backgroundTint="@color/accent"
             android:text="Range စမယ်"
-            android:textColor="#0A0A0B"
+            android:textColor="#FFFFFF"
             android:textSize="16sp"
             android:textStyle="bold" />
 

@@ -11,6 +11,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
@@ -21,8 +22,7 @@ class ScanFragment : Fragment() {
 
     private lateinit var engine: ScanEngine
     private lateinit var adapter: ResultsAdapter
-    private val results = mutableListOf<ScanResult>()
-    private val seen = mutableSetOf<String>()
+    private lateinit var vm: ScanViewModel
 
     private lateinit var btnScan: Button
     private lateinit var tvProgress: TextView
@@ -40,6 +40,7 @@ class ScanFragment : Fragment() {
 
     override fun onViewCreated(v: View, s: Bundle?) {
         engine = ScanEngine(requireContext())
+        vm = ViewModelProvider(requireActivity())[ScanViewModel::class.java]
         adapter = ResultsAdapter(onNeighborScan = { r -> neighborScan(r) })
 
         btnScan = v.findViewById(R.id.btnScan)
@@ -55,16 +56,20 @@ class ScanFragment : Fragment() {
         btnLogToggle.setOnClickListener {
             if (svLog.visibility == View.VISIBLE) {
                 svLog.visibility = View.GONE
-                btnLogToggle.text = "Log ပြမယ်"
+                btnLogToggle.text = "Show log"
             } else {
                 svLog.visibility = View.VISIBLE
-                btnLogToggle.text = "Log ဖျောက်မယ်"
+                btnLogToggle.text = "Hide log"
             }
         }
 
         val rv = v.findViewById<RecyclerView>(R.id.rvResults)
         rv.layoutManager = LinearLayoutManager(requireContext())
         rv.adapter = adapter
+
+        // Restore results from previous scans (survives tab switches).
+        adapter.items = vm.results.toList()
+        updateCount()
 
         for (p in ScanHelper.PRESET_PORTS) {
             val chip = Chip(requireContext()).apply {
@@ -79,7 +84,7 @@ class ScanFragment : Fragment() {
             if (engine.running) {
                 engine.cancel()
                 setIdle()
-                toast("ရပ်လိုက်ပြီ")
+                toast("Stopped")
             } else startScan()
         }
     }
@@ -93,33 +98,41 @@ class ScanFragment : Fragment() {
         return if (out.isEmpty()) "500" else out.joinToString(",")
     }
 
+    private fun updateCount() {
+        tvCount.text = if (vm.results.isEmpty()) "Results (0)"
+        else "Results (${vm.results.size}) — lowest ms first"
+    }
+
     private fun startScan() {
-        results.clear(); seen.clear()
-        adapter.items = results
-        tvCount.text = "ရလဒ် (0)"
+        vm.clear()
+        adapter.items = emptyList()
+        updateCount()
         logLines.clear()
         tvLog.text = ""
         svLog.visibility = View.VISIBLE
-        btnLogToggle.text = "Log ဖျောက်မယ်"
+        btnLogToggle.text = "Hide log"
         val target = etTarget.text.toString().toIntOrNull()?.coerceIn(1, 100) ?: 10
-        btnScan.text = "■ ရပ်"
+        btnScan.text = "■ Stop"
         progressBar.visibility = View.VISIBLE
-        tvProgress.text = "စတင်နေတယ်…"
-        appendLog("scan စမယ်…")
+        tvProgress.text = "Starting…"
+        appendLog("starting scan…")
 
         engine.scan(
             ScanHelper.quickScanArgs(selectedPorts(), target),
             onResult = { r ->
                 if (ScanHelper.isStable(r)) {
-                    val key = r.endpoint
+                    val isNew = vm.add(r)
+                    // Persist every stable hit to the backup list automatically.
+                    BackupStore.add(
+                        requireContext(),
+                        BackupEntry(r.ip, r.port, r.latencyMs, System.currentTimeMillis())
+                    )
                     activity?.runOnUiThread {
-                        if (seen.add(key)) {
-                            results.add(r)
-                            ScanHelper.sortByMs(results)
-                            adapter.items = results.toList()
-                            tvCount.text = "ရလဒ် (${results.size}) — ms အနိမ့်ဆုံးအပေါ်"
+                        if (isNew) {
+                            adapter.items = vm.results.toList()
+                            updateCount()
                         }
-                        appendLog("✓ $key ${r.latencyMs ?: "?"} ms")
+                        appendLog("✓ ${r.endpoint} ${r.latencyMs ?: "?"} ms")
                     }
                 }
             },
@@ -132,10 +145,10 @@ class ScanFragment : Fragment() {
             onDone = { ok, err ->
                 activity?.runOnUiThread {
                     setIdle()
-                    appendLog(if (ok) "scan ပြီးပြီ" else "အမှား: ${err ?: "unknown"}")
-                    if (!ok) toast("အမှား: ${err ?: "unknown"}")
-                    else if (results.isEmpty()) toast("တည်ငြိမ်တဲ့ endpoint မတွေ့ဘူး")
-                    else toast("${results.size} ခု တွေ့တယ်")
+                    appendLog(if (ok) "scan done" else "Error: ${err ?: "unknown"}")
+                    if (!ok) toast("Error: ${err ?: "unknown"}")
+                    else if (vm.results.isEmpty()) toast("No stable endpoint found")
+                    else toast("Found ${vm.results.size} — saved to Backup")
                 }
             }
         )
@@ -152,11 +165,11 @@ class ScanFragment : Fragment() {
     /** Per-endpoint "/24" button: neighbor-scan that IP's /24 into the backup list. */
     private fun neighborScan(r: ScanResult) {
         if (engine.running) {
-            toast("scan တစ်ခု run နေတယ် — ပြီးမှလုပ်ပါ")
+            toast("A scan is running — wait for it to finish")
             return
         }
         val cidr = ScanHelper.cidr24(r.ip)
-        toast("$cidr စစ်နေတယ်…")
+        toast("Scanning $cidr…")
         engine.scan(
             ScanHelper.rangeScanArgs(cidr, selectedPorts(), 30),
             onResult = { hit ->
@@ -170,15 +183,15 @@ class ScanFragment : Fragment() {
             onProgress = {},
             onDone = { ok, err ->
                 activity?.runOnUiThread {
-                    if (ok) toast("$cidr ပြီးပြီ — backup ထဲပေါင်းထည့်ပြီးပြီ")
-                    else toast("အမှား: ${err ?: "unknown"}")
+                    if (ok) toast("$cidr done — added to Backup")
+                    else toast("Error: ${err ?: "unknown"}")
                 }
             }
         )
     }
 
     private fun setIdle() {
-        btnScan.text = "SCAN စမယ်"
+        btnScan.text = "SCAN"
         progressBar.visibility = View.GONE
     }
 

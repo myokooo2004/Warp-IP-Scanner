@@ -32,7 +32,7 @@ class BackupFragment : Fragment() {
             onCopy = { e ->
                 val cm = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 cm.setPrimaryClip(ClipData.newPlainText("endpoint", e.endpoint))
-                toast(e.endpoint + " copy ကူးပြီးပြီ")
+                toast(e.endpoint + " copied")
             },
             onDelete = { e ->
                 BackupStore.remove(requireContext(), e.ip, e.port)
@@ -45,7 +45,7 @@ class BackupFragment : Fragment() {
         v.findViewById<Button>(R.id.btnClear).setOnClickListener {
             BackupStore.clear(requireContext())
             refresh()
-            toast("backup ရှင်းလိုက်ပြီ")
+            toast("Backup cleared")
         }
     }
 
@@ -57,12 +57,12 @@ class BackupFragment : Fragment() {
     private fun refresh() {
         entries = BackupStore.load(requireContext())
         adapter.items = entries
-        view?.findViewById<TextView>(R.id.tvBackupCount)?.text = "သိမ်းထားတာ (${entries.size})"
+        view?.findViewById<TextView>(R.id.tvBackupCount)?.text = "Saved (${entries.size})"
     }
 
     private fun export() {
         if (entries.isEmpty()) {
-            toast("export လုပ်စရာ မရှိဘူး")
+            toast("Nothing to export")
             return
         }
         try {
@@ -77,9 +77,9 @@ class BackupFragment : Fragment() {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            startActivity(Intent.createChooser(share, "CSV ပို့မယ်"))
+            startActivity(Intent.createChooser(share, "Share CSV"))
         } catch (e: Exception) {
-            toast("export အမှား: ${e.message}")
+            toast("Export error: ${e.message}")
         }
     }
 

@@ -17,8 +17,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="သိမ်းထားတာ (0)"
-            android:textColor="@color/yellow"
+            android:text="Saved (0)"
+            android:textColor="@color/accent"
             android:textSize="16sp"
             android:textStyle="bold" />
 
@@ -27,7 +27,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="⬇ Export"
-            android:textColor="@color/yellow"
+            android:textColor="@color/accent"
             android:textSize="12sp" />
 
         <Button
@@ -35,7 +35,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
-            android:text="ရှင်း"
+            android:text="Clear"
             android:textColor="#FF8A80"
             android:textSize="12sp" />
     </LinearLayout>
@@ -44,7 +44,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:text="နှိပ်ရင် copy ကူးမယ်"
+        android:text="Tap a row to copy"
         android:textColor="@color/gray"
         android:textSize="11sp" />
 

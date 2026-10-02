@@ -83,7 +83,7 @@ class ScanEngine(private val ctx: Context) {
                                 )
                             )
                             "finished" -> onProgress(
-                                "ပြီးပြီ — ${o.optInt("found", 0)} ခု တွေ့တယ်"
+                                "done — found ${o.optInt("found", 0)}"
                             )
                         }
                     } catch (_: Exception) { /* ignore malformed line */ }
