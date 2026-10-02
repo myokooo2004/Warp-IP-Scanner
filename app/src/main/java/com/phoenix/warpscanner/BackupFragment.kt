@@ -1,26 +1,37 @@
 package com.phoenix.warpscanner
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.content.FileProvider
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import java.io.File
 
 /** Persistent backup list of known-good endpoints: copy, export CSV, clear. */
 class BackupFragment : Fragment() {
 
     private lateinit var adapter: BackupAdapter
     private var entries: MutableList<BackupEntry> = mutableListOf()
+
+    private val permLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) exportLegacy() else toast("Storage permission denied")
+        }
 
     override fun onCreateView(inf: LayoutInflater, c: ViewGroup?, s: Bundle?): View? =
         inf.inflate(R.layout.fragment_backup, c, false)
@@ -41,8 +52,8 @@ class BackupFragment : Fragment() {
         )
         rv.adapter = adapter
 
-        v.findViewById<Button>(R.id.btnExport).setOnClickListener { export() }
-        v.findViewById<Button>(R.id.btnClear).setOnClickListener {
+        v.findViewById<TextView>(R.id.btnExport).setOnClickListener { export() }
+        v.findViewById<TextView>(R.id.btnClear).setOnClickListener {
             BackupStore.clear(requireContext())
             refresh()
             toast("Backup cleared")
@@ -60,24 +71,63 @@ class BackupFragment : Fragment() {
         view?.findViewById<TextView>(R.id.tvBackupCount)?.text = "Saved (${entries.size})"
     }
 
+    private fun buildCsv(): String {
+        val sb = StringBuilder("ip,port,latency_ms,saved_at\n")
+        for (e in entries) {
+            sb.append(e.ip).append(',')
+                .append(e.port).append(',')
+                .append(e.ms ?: "").append(',')
+                .append(e.savedAt).append('\n')
+        }
+        return sb.toString()
+    }
+
+    /** Save the CSV straight into the Download folder (no share sheet). */
     private fun export() {
         if (entries.isEmpty()) {
             toast("Nothing to export")
             return
         }
-        try {
-            val csv = BackupStore.exportCsv(requireContext())
-            val uri = FileProvider.getUriForFile(
-                requireContext(),
-                requireContext().packageName + ".fileprovider",
-                csv
-            )
-            val share = Intent(Intent.ACTION_SEND).apply {
-                type = "text/csv"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (Build.VERSION.SDK_INT >= 29) {
+            exportMediaStore()
+        } else {
+            if (ContextCompat.checkSelfPermission(
+                    requireContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                exportLegacy()
+            } else {
+                permLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             }
-            startActivity(Intent.createChooser(share, "Share CSV"))
+        }
+    }
+
+    private fun exportMediaStore() {
+        val name = "warp-endpoints-${System.currentTimeMillis()}.csv"
+        try {
+            val resolver = requireContext().contentResolver
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, name)
+                put(MediaStore.Downloads.MIME_TYPE, "text/csv")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: throw IllegalStateException("MediaStore insert failed")
+            resolver.openOutputStream(uri)?.use { it.write(buildCsv().toByteArray()) }
+                ?: throw IllegalStateException("cannot open output")
+            toast("Saved to Download/$name")
+        } catch (e: Exception) {
+            toast("Export error: ${e.message}")
+        }
+    }
+
+    private fun exportLegacy() {
+        val name = "warp-endpoints-${System.currentTimeMillis()}.csv"
+        try {
+            val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!dir.exists()) dir.mkdirs()
+            File(dir, name).writeText(buildCsv())
+            toast("Saved to Download/$name")
         } catch (e: Exception) {
             toast("Export error: ${e.message}")
         }
@@ -97,7 +147,7 @@ class BackupFragment : Fragment() {
         class VH(v: View) : RecyclerView.ViewHolder(v) {
             val ip: TextView = v.findViewById(R.id.tvIp)
             val ms: TextView = v.findViewById(R.id.tvMs)
-            val del: Button = v.findViewById(R.id.btnDelete)
+            val del: TextView = v.findViewById(R.id.btnDelete)
         }
 
         override fun onCreateViewHolder(p: ViewGroup, vt: Int): VH =

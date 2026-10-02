@@ -7,9 +7,9 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
-import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -17,7 +17,13 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 
-/** Quick scan: preset WARP pools, stable-only results sorted by ms. */
+/**
+ * Quick scan in two phases:
+ *  1. Fast shape-only scan -> stable candidates, keep top 3 by ms.
+ *  2. Full WireGuard handshake verification (with the user's own .conf)
+ *     against exactly those 3 -> only verified endpoints are shown/saved.
+ * No log box: a single status line shows what is happening.
+ */
 class ScanFragment : Fragment() {
 
     private lateinit var engine: ScanEngine
@@ -30,10 +36,27 @@ class ScanFragment : Fragment() {
     private lateinit var progressBar: ProgressBar
     private lateinit var chipGroup: ChipGroup
     private lateinit var etTarget: EditText
-    private lateinit var tvLog: TextView
-    private lateinit var svLog: ScrollView
-    private lateinit var btnLogToggle: Button
-    private val logLines = mutableListOf<String>()
+    private lateinit var tvConfStatus: TextView
+    private lateinit var tvConfImport: TextView
+
+    /** Set while the user pressed Stop; prevents phase 2 from starting. */
+    @Volatile private var cancelled = false
+
+    private val pickConf = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            val text = requireContext().contentResolver
+                .openInputStream(uri)?.bufferedReader()?.readText().orEmpty()
+            if (WgConfStore.save(requireContext(), text)) {
+                updateConfRow()
+                toast("WARP config imported")
+            } else {
+                toast("Not a valid WireGuard .conf")
+            }
+        } catch (_: Exception) {
+            toast("Import failed")
+        }
+    }
 
     override fun onCreateView(inf: LayoutInflater, c: ViewGroup?, s: Bundle?): View? =
         inf.inflate(R.layout.fragment_scan, c, false)
@@ -49,25 +72,17 @@ class ScanFragment : Fragment() {
         progressBar = v.findViewById(R.id.progressBar)
         chipGroup = v.findViewById(R.id.chipPorts)
         etTarget = v.findViewById(R.id.etTarget)
-        tvLog = v.findViewById(R.id.tvLog)
-        svLog = v.findViewById(R.id.svLog)
-        btnLogToggle = v.findViewById(R.id.btnLogToggle)
+        tvConfStatus = v.findViewById(R.id.tvConfStatus)
+        tvConfImport = v.findViewById(R.id.tvConfImport)
 
-        btnLogToggle.setOnClickListener {
-            if (svLog.visibility == View.VISIBLE) {
-                svLog.visibility = View.GONE
-                btnLogToggle.text = "Show log"
-            } else {
-                svLog.visibility = View.VISIBLE
-                btnLogToggle.text = "Hide log"
-            }
-        }
+        updateConfRow()
+        tvConfImport.setOnClickListener { pickConf.launch("*/*") }
 
         val rv = v.findViewById<RecyclerView>(R.id.rvResults)
         rv.layoutManager = LinearLayoutManager(requireContext())
         rv.adapter = adapter
 
-        // Restore results from previous scans (survives tab switches).
+        // Restore verified results from previous scans (survives tab switches).
         adapter.items = vm.results.toList()
         updateCount()
 
@@ -82,11 +97,23 @@ class ScanFragment : Fragment() {
 
         btnScan.setOnClickListener {
             if (engine.running) {
+                cancelled = true
                 engine.cancel()
                 setIdle()
+                setStatus("Stopped")
                 toast("Stopped")
             } else startScan()
         }
+    }
+
+    private fun updateConfRow() {
+        val ok = WgConfStore.exists(requireContext())
+        tvConfStatus.text = if (ok) "WARP config: ✓ loaded" else "WARP config: not loaded"
+        tvConfStatus.setTextColor(
+            if (ok) resources.getColor(R.color.accent, null)
+            else resources.getColor(R.color.gray, null)
+        )
+        tvConfImport.text = if (ok) "Replace" else "Import .conf"
     }
 
     private fun selectedPorts(): String {
@@ -99,67 +126,109 @@ class ScanFragment : Fragment() {
     }
 
     private fun updateCount() {
-        tvCount.text = if (vm.results.isEmpty()) "Results (0)"
-        else "Results (${vm.results.size}) — lowest ms first"
+        tvCount.text = "✓ Verified (${vm.results.size})"
+    }
+
+    private fun setStatus(msg: String) {
+        tvProgress.text = msg
     }
 
     private fun startScan() {
+        if (!WgConfStore.exists(requireContext())) {
+            toast("Import your WARP .conf first")
+            return
+        }
+        cancelled = false
         vm.clear()
         adapter.items = emptyList()
         updateCount()
-        logLines.clear()
-        tvLog.text = ""
-        svLog.visibility = View.VISIBLE
-        btnLogToggle.text = "Hide log"
         val target = etTarget.text.toString().toIntOrNull()?.coerceIn(1, 100) ?: 10
         btnScan.text = "■ Stop"
         progressBar.visibility = View.VISIBLE
-        tvProgress.text = "Starting…"
-        appendLog("starting scan…")
+        setStatus("Scanning…")
 
+        // Phase 1: fast candidates, collected silently.
+        val candidates = mutableListOf<ScanResult>()
         engine.scan(
             ScanHelper.quickScanArgs(selectedPorts(), target),
             onResult = { r ->
                 if (ScanHelper.isStable(r)) {
-                    val isNew = vm.add(r)
-                    // Persist every stable hit to the backup list automatically.
-                    BackupStore.add(
-                        requireContext(),
-                        BackupEntry(r.ip, r.port, r.latencyMs, System.currentTimeMillis())
-                    )
-                    activity?.runOnUiThread {
-                        if (isNew) {
-                            adapter.items = vm.results.toList()
-                            updateCount()
-                        }
-                        appendLog("✓ ${r.endpoint} ${r.latencyMs ?: "?"} ms")
+                    synchronized(candidates) {
+                        if (candidates.none { it.endpoint == r.endpoint }) candidates.add(r)
                     }
                 }
             },
-            onProgress = { msg ->
-                activity?.runOnUiThread {
-                    tvProgress.text = msg
-                    appendLog(msg)
-                }
-            },
+            onProgress = {},
             onDone = { ok, err ->
                 activity?.runOnUiThread {
-                    setIdle()
-                    appendLog(if (ok) "scan done" else "Error: ${err ?: "unknown"}")
-                    if (!ok) toast("Error: ${err ?: "unknown"}")
-                    else if (vm.results.isEmpty()) toast("No stable endpoint found")
-                    else toast("Found ${vm.results.size} — saved to Backup")
+                    if (cancelled) return@runOnUiThread
+                    if (!ok) {
+                        setIdle()
+                        setStatus("Scan error")
+                        toast("Error: ${err ?: "unknown"}")
+                        return@runOnUiThread
+                    }
+                    val top3 = synchronized(candidates) {
+                        candidates.sortedWith(
+                            compareBy({ it.latencyMs ?: Long.MAX_VALUE }, { it.ip })
+                        ).take(3)
+                    }
+                    startVerify(top3)
                 }
             }
         )
     }
 
-    /** Append a line to the on-screen log (keeps the last 80, auto-scrolls). */
-    private fun appendLog(msg: String) {
-        logLines.add(msg)
-        if (logLines.size > 80) logLines.removeAt(0)
-        tvLog.text = logLines.joinToString("\n")
-        svLog.post { svLog.fullScroll(View.FOCUS_DOWN) }
+    /** Phase 2: full handshake verification of exactly the top-3 candidates. */
+    private fun startVerify(top3: List<ScanResult>) {
+        if (top3.isEmpty()) {
+            setIdle()
+            setStatus("No stable endpoint found")
+            toast("No stable endpoint found")
+            return
+        }
+        setStatus("Verifying handshake 0/${top3.size}…")
+        var done = 0
+        engine.scan(
+            ScanHelper.verifyArgs(top3, WgConfStore.path(requireContext())),
+            onResult = { r ->
+                // The engine only reports endpoints that completed the handshake.
+                done++
+                val isNew = vm.add(r)
+                BackupStore.add(
+                    requireContext(),
+                    BackupEntry(r.ip, r.port, r.latencyMs, System.currentTimeMillis())
+                )
+                activity?.runOnUiThread {
+                    if (isNew) {
+                        adapter.items = vm.results.toList()
+                        updateCount()
+                    }
+                    setStatus("Verifying handshake $done/${top3.size}…")
+                }
+            },
+            onProgress = {},
+            onDone = { ok, err ->
+                activity?.runOnUiThread {
+                    setIdle()
+                    when {
+                        cancelled -> setStatus("Stopped")
+                        !ok -> {
+                            setStatus("Verify error")
+                            toast("Error: ${err ?: "unknown"}")
+                        }
+                        vm.results.isEmpty() -> {
+                            setStatus("No handshake-verified endpoint")
+                            toast("No handshake-verified endpoint")
+                        }
+                        else -> {
+                            setStatus("✓ ${vm.results.size} verified — saved to Backup")
+                            toast("✓ ${vm.results.size} verified")
+                        }
+                    }
+                }
+            }
+        )
     }
 
     /** Per-endpoint "/24" button: neighbor-scan that IP's /24 into the backup list. */
@@ -199,6 +268,7 @@ class ScanFragment : Fragment() {
         Toast.makeText(requireContext(), m, Toast.LENGTH_SHORT).show()
 
     override fun onDestroyView() {
+        cancelled = true
         engine.cancel()
         super.onDestroyView()
     }

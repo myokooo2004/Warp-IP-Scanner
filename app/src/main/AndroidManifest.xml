@@ -4,6 +4,11 @@
     <!-- The bundled scanner engine opens raw UDP sockets -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Only for direct-to-Download CSV export on Android 8/9 (API 24-28).
+         API 29+ uses MediaStore, which needs no permission. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
         android:allowBackup="true"

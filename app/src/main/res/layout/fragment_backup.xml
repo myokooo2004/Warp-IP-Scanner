@@ -22,22 +22,26 @@
             android:textSize="16sp"
             android:textStyle="bold" />
 
-        <Button
+        <TextView
             android:id="@+id/btnExport"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:padding="8dp"
             android:text="⬇ Export"
             android:textColor="@color/accent"
-            android:textSize="12sp" />
+            android:textSize="13sp"
+            android:textStyle="bold" />
 
-        <Button
+        <TextView
             android:id="@+id/btnClear"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
+            android:padding="8dp"
             android:text="Clear"
             android:textColor="#FF8A80"
-            android:textSize="12sp" />
+            android:textSize="13sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <TextView
