@@ -3,13 +3,13 @@
     <item
         android:id="@+id/nav_scan"
         android:title="စကင်"
-        android:icon="@android:drawable/ic_menu_search" />
+        android:icon="@drawable/ic_nav_scan" />
     <item
         android:id="@+id/nav_range"
         android:title="Range"
-        android:icon="@android:drawable/ic_menu_dialpad" />
+        android:icon="@drawable/ic_nav_range" />
     <item
         android:id="@+id/nav_backup"
         android:title="Backup"
-        android:icon="@android:drawable/ic_menu_save" />
+        android:icon="@drawable/ic_nav_backup" />
 </menu>
