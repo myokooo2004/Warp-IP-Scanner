@@ -9,6 +9,8 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
+import androidx.core.widget.doAfterTextChanged
 
 /**
  * Range scan: user-supplied CIDRs -> stable endpoints appended to the
@@ -19,20 +21,31 @@ class RangeFragment : Fragment() {
     private lateinit var engine: ScanEngine
     private lateinit var btnScan: Button
     private lateinit var tvProgress: TextView
+    private lateinit var etCidrs: EditText
+    private lateinit var vm: ScanViewModel
     private var added = 0
+
+    /** True while the CIDR field is being set programmatically (not by the user). */
+    private var programmaticCidr = false
 
     override fun onCreateView(inf: LayoutInflater, c: ViewGroup?, s: Bundle?): View? =
         inf.inflate(R.layout.fragment_range, c, false)
 
     override fun onViewCreated(v: View, s: Bundle?) {
         engine = ScanEngine(requireContext())
-        val etCidrs = v.findViewById<EditText>(R.id.etCidrs)
+        vm = ViewModelProvider(requireActivity())[ScanViewModel::class.java]
+        etCidrs = v.findViewById(R.id.etCidrs)
         val etPorts = v.findViewById<EditText>(R.id.etPorts)
         btnScan = v.findViewById(R.id.btnRangeScan)
         tvProgress = v.findViewById(R.id.tvRangeProgress)
 
-        etCidrs.setText("8.34.146.0/24,8.35.211.0/24,8.39.204.0/24")
+        refreshCidrField()
         etPorts.setText("500")
+
+        // Manual edits take ownership of the field: auto-fill stops touching it.
+        etCidrs.doAfterTextChanged {
+            if (!programmaticCidr) vm.rangeCidrsManual = true
+        }
 
         btnScan.setOnClickListener {
             if (engine.running) {
@@ -76,6 +89,18 @@ class RangeFragment : Fragment() {
                 }
             )
         }
+    }
+
+    /**
+     * Fill the CIDR field from the latest verified scan (/24s, rank order).
+     * Never overwrites the user's own manual input.
+     */
+    private fun refreshCidrField() {
+        if (vm.rangeCidrsManual) return
+        val cidrs = vm.verifiedCidrs.ifEmpty { ScanHelper.DEFAULT_RANGE_CIDRS }
+        programmaticCidr = true
+        etCidrs.setText(cidrs)
+        programmaticCidr = false
     }
 
     private fun toast(m: String) =

@@ -224,6 +224,11 @@ class ScanFragment : Fragment() {
                         else -> {
                             setStatus("✓ ${vm.results.size} verified — saved to Backup")
                             toast("✓ ${vm.results.size} verified")
+                            // Feed the Range tab: /24s of the verified endpoints (rank order).
+                            vm.verifiedCidrs = vm.results
+                                .map { ScanHelper.cidr24(it.ip) }
+                                .distinct()
+                                .joinToString(",")
                         }
                     }
                 }

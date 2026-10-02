@@ -15,6 +15,9 @@ object ScanHelper {
 
     val PRESET_PORTS = listOf("500", "2408", "1701", "4500")
 
+    /** Default CIDRs pre-filled on the Range tab (known-good 8.x ranges). */
+    const val DEFAULT_RANGE_CIDRS = "8.34.146.0/24,8.35.211.0/24,8.39.204.0/24"
+
     /**
      * Stability rule: keep an endpoint only when EVERY handshake probe
      * answered (0% loss). Lossy endpoints make unstable tunnels, so they
