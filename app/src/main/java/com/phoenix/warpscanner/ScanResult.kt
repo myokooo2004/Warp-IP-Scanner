@@ -7,7 +7,9 @@ data class ScanResult(
     /** Round-trip ms of the WireGuard handshake probe; null if the engine did not report it. */
     val latencyMs: Long?,
     /** Packet-loss percent across the engine's handshake probes (0 = perfectly stable). */
-    val lossPct: Int
+    val lossPct: Int,
+    /** Spread (max-min) of successful probe latencies; null if the engine did not report it. */
+    val jitterMs: Long? = null
 ) {
     val endpoint: String get() = "$ip:$port"
 }

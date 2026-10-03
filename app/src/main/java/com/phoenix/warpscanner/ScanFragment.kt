@@ -1,6 +1,9 @@
 package com.phoenix.warpscanner
 
 import android.os.Bundle
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -18,11 +21,14 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 
 /**
- * Quick scan in two phases:
- *  1. Fast shape-only scan -> stable candidates, keep top 3 by ms.
- *  2. Full WireGuard handshake verification (with the user's own .conf)
- *     against exactly those 3 -> only verified endpoints are shown/saved.
- * No log box: a single status line shows what is happening.
+ * One-tap staged scan:
+ *  1. Probe   — fast scan -> 0%-loss candidates.
+ *  2. Rank    — unlisted-first, then ms+jitter, then past success;
+ *               known-dead skipped, /24-diverse top 3.
+ *  3. Verify  — full WireGuard handshake (with the user's own .conf)
+ *               against exactly those 3 -> only verified endpoints shown/saved.
+ * Best endpoint lands on top automatically. No log box: a single status
+ * line shows the current stage.
  */
 class ScanFragment : Fragment() {
 
@@ -31,6 +37,7 @@ class ScanFragment : Fragment() {
     private lateinit var vm: ScanViewModel
 
     private lateinit var btnScan: Button
+    private lateinit var btnCopyTop: Button
     private lateinit var tvProgress: TextView
     private lateinit var tvCount: TextView
     private lateinit var progressBar: ProgressBar
@@ -67,6 +74,7 @@ class ScanFragment : Fragment() {
         adapter = ResultsAdapter(onNeighborScan = { r -> neighborScan(r) })
 
         btnScan = v.findViewById(R.id.btnScan)
+        btnCopyTop = v.findViewById(R.id.btnCopyTop)
         tvProgress = v.findViewById(R.id.tvProgress)
         tvCount = v.findViewById(R.id.tvCount)
         progressBar = v.findViewById(R.id.progressBar)
@@ -74,6 +82,8 @@ class ScanFragment : Fragment() {
         etTarget = v.findViewById(R.id.etTarget)
         tvConfStatus = v.findViewById(R.id.tvConfStatus)
         tvConfImport = v.findViewById(R.id.tvConfImport)
+
+        btnCopyTop.setOnClickListener { copyWinner() }
 
         updateConfRow()
         tvConfImport.setOnClickListener { pickConf.launch("*/*") }
@@ -127,12 +137,30 @@ class ScanFragment : Fragment() {
 
     private fun updateCount() {
         tvCount.text = "✓ Verified (${vm.results.size})"
+        btnCopyTop.visibility = if (vm.results.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    /** One-tap winner export: copies the #1 endpoint for pasting into the VPN app. */
+    private fun copyWinner() {
+        val top = vm.results.firstOrNull() ?: return
+        val cm = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("endpoint", top.endpoint))
+        toast("${top.endpoint} copy ကူးပြီးပြီ")
     }
 
     private fun setStatus(msg: String) {
         tvProgress.text = msg
     }
 
+    /**
+     * One-tap staged pipeline:
+     *  1. Probe   — fast scan of ~300 endpoints (engine).
+     *  2. Filter  — keep 0%-loss endpoints only.
+     *  3. Rank    — unlisted-first, then ms+jitter, then past success;
+     *               skip known-dead; keep /24 diversity.
+     *  4. Verify  — WireGuard handshake on the top candidates.
+     * The best endpoint lands at the top automatically.
+     */
     private fun startScan() {
         if (!WgConfStore.exists(requireContext())) {
             toast("Import your WARP .conf first")
@@ -145,9 +173,9 @@ class ScanFragment : Fragment() {
         val target = etTarget.text.toString().toIntOrNull()?.coerceIn(1, 100) ?: 10
         btnScan.text = "■ Stop"
         progressBar.visibility = View.VISIBLE
-        setStatus("Scanning…")
+        setStatus("Stage 1/4 · Probing endpoints…")
 
-        // Phase 1: fast candidates, collected silently.
+        // Stage 1: fast candidates, collected silently.
         val candidates = mutableListOf<ScanResult>()
         engine.scan(
             ScanHelper.quickScanArgs(selectedPorts(), target),
@@ -168,48 +196,70 @@ class ScanFragment : Fragment() {
                         toast("Error: ${err ?: "unknown"}")
                         return@runOnUiThread
                     }
-                    val top3 = synchronized(candidates) {
-                        candidates.sortedWith(
-                            compareBy({ it.latencyMs ?: Long.MAX_VALUE }, { it.ip })
-                        ).take(3)
+                    // Stage 2+3: filter, rank, diversify.
+                    setStatus("Stage 2/4 · Filtering · 3/4 · Ranking…")
+                    val ctx = requireContext()
+                    val ranked = synchronized(candidates) {
+                        ScanHelper.ranked(
+                            candidates.filter { !EndpointHistoryStore.isKnownDead(ctx, it.endpoint) },
+                            goodCount = { EndpointHistoryStore.goodCount(ctx, it) }
+                        )
                     }
-                    startVerify(top3)
+                    val pick = ScanHelper.diverseTop(ranked, 3)
+                    startVerify(pick)
                 }
             }
         )
     }
 
-    /** Phase 2: full handshake verification of exactly the top-3 candidates. */
-    private fun startVerify(top3: List<ScanResult>) {
-        if (top3.isEmpty()) {
+    /** Stage 4: full handshake verification of exactly the top candidates. */
+    private fun startVerify(pick: List<ScanResult>) {
+        if (pick.isEmpty()) {
             setIdle()
             setStatus("No stable endpoint found")
             toast("No stable endpoint found")
             return
         }
-        setStatus("Verifying handshake 0/${top3.size}…")
+        setStatus("Stage 4/4 · Verifying handshake 0/${pick.size}…")
         var done = 0
+        val ctx = requireContext()
+        val verifiedNow = mutableSetOf<String>()
         engine.scan(
-            ScanHelper.verifyArgs(top3, WgConfStore.path(requireContext())),
+            ScanHelper.verifyArgs(pick, WgConfStore.path(ctx)),
             onResult = { r ->
                 // The engine only reports endpoints that completed the handshake.
                 done++
+                verifiedNow.add(r.endpoint)
                 val isNew = vm.add(r)
+                EndpointHistoryStore.recordVerified(ctx, r.endpoint, r.latencyMs, r.jitterMs)
                 BackupStore.add(
-                    requireContext(),
-                    BackupEntry(r.ip, r.port, r.latencyMs, System.currentTimeMillis())
+                    ctx,
+                    BackupEntry(ip = r.ip, port = r.port, ms = r.latencyMs, jitterMs = r.jitterMs, savedAt = System.currentTimeMillis())
                 )
                 activity?.runOnUiThread {
                     if (isNew) {
                         adapter.items = vm.results.toList()
                         updateCount()
                     }
-                    setStatus("Verifying handshake $done/${top3.size}…")
+                    setStatus("Stage 4/4 · Verifying handshake $done/${pick.size}…")
                 }
             },
             onProgress = {},
             onDone = { ok, err ->
                 activity?.runOnUiThread {
+                    // Candidates that went through a completed verify but never
+                    // reported = dead. (Not on cancel/error: that proves nothing.)
+                    if (ok && !cancelled) {
+                        for (c in pick) {
+                            if (c.endpoint !in verifiedNow) {
+                                EndpointHistoryStore.recordDead(ctx, c.endpoint)
+                            }
+                        }
+                    }
+                    // Final order: staged rank with history tiebreak — best on top.
+                    vm.sortStaged { EndpointHistoryStore.goodCount(ctx, it) }
+                    adapter.items = vm.results.toList()
+                    updateCount()
                     setIdle()
                     when {
                         cancelled -> setStatus("Stopped")
@@ -250,7 +300,7 @@ class ScanFragment : Fragment() {
                 if (ScanHelper.isStable(hit)) {
                     BackupStore.add(
                         requireContext(),
-                        BackupEntry(hit.ip, hit.port, hit.latencyMs, System.currentTimeMillis())
+                        BackupEntry(ip = hit.ip, port = hit.port, ms = hit.latencyMs, jitterMs = hit.jitterMs, savedAt = System.currentTimeMillis())
                     )
                 }
             },

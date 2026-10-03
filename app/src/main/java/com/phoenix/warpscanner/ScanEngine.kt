@@ -79,7 +79,8 @@ class ScanEngine(private val ctx: Context) {
                                     ip = o.getString("ip"),
                                     port = o.getInt("port"),
                                     latencyMs = if (o.isNull("latency_ms")) null else o.optLong("latency_ms"),
-                                    lossPct = o.optInt("loss_pct", 0)
+                                    lossPct = o.optInt("loss_pct", 0),
+                                    jitterMs = if (o.isNull("jitter_ms")) null else o.optLong("jitter_ms")
                                 )
                             )
                             "finished" -> onProgress(

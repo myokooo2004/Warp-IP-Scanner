@@ -21,8 +21,21 @@ class ScanViewModel : ViewModel() {
     fun add(r: ScanResult): Boolean {
         if (!seen.add(r.endpoint)) return false
         results.add(r)
-        ScanHelper.sortByMs(results)
+        results.sortWith(
+            compareBy(
+                { if (ScanHelper.isListed(it.ip)) 1 else 0 },
+                { (it.latencyMs ?: Long.MAX_VALUE) + (it.jitterMs ?: 0L) },
+                { it.ip }
+            )
+        )
         return true
+    }
+
+    /** Final order after a scan: staged rank with history tiebreak. */
+    fun sortStaged(goodCount: (String) -> Int) {
+        val ranked = ScanHelper.ranked(results, goodCount)
+        results.clear()
+        results.addAll(ranked)
     }
 
     fun clear() {

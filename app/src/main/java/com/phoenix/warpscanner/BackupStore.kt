@@ -9,6 +9,7 @@ data class BackupEntry(
     val ip: String,
     val port: Int,
     val ms: Long?,
+    val jitterMs: Long? = null,
     val savedAt: Long
 ) {
     val endpoint: String get() = "$ip:$port"
@@ -32,6 +33,7 @@ object BackupStore {
                         ip = o.getString("ip"),
                         port = o.getInt("port"),
                         ms = if (o.isNull("ms")) null else o.getLong("ms"),
+                        jitterMs = if (o.isNull("jitterMs")) null else o.optLong("jitterMs"),
                         savedAt = o.optLong("savedAt", 0L)
                     )
                 )
@@ -49,6 +51,7 @@ object BackupStore {
                     put("ip", e.ip)
                     put("port", e.port)
                     if (e.ms != null) put("ms", e.ms) else put("ms", JSONObject.NULL)
+                    if (e.jitterMs != null) put("jitterMs", e.jitterMs) else put("jitterMs", JSONObject.NULL)
                     put("savedAt", e.savedAt)
                 })
             }
@@ -67,7 +70,7 @@ object BackupStore {
                 entry.ms == null -> old.ms
                 else -> minOf(old.ms, entry.ms)
             }
-            list[i] = old.copy(ms = bestMs, savedAt = entry.savedAt)
+            list[i] = old.copy(ms = bestMs, jitterMs = entry.jitterMs ?: old.jitterMs, savedAt = entry.savedAt)
         } else {
             list.add(entry)
         }
@@ -89,11 +92,12 @@ object BackupStore {
     fun exportCsv(ctx: Context): File {
         val dir = File(ctx.cacheDir, "exports").apply { mkdirs() }
         val out = File(dir, "warp-endpoints.csv")
-        val sb = StringBuilder("ip,port,latency_ms,saved_at\n")
+        val sb = StringBuilder("ip,port,latency_ms,jitter_ms,saved_at\n")
         for (e in load(ctx)) {
             sb.append(e.ip).append(',')
                 .append(e.port).append(',')
                 .append(e.ms ?: "").append(',')
+                .append(e.jitterMs ?: "").append(',')
                 .append(e.savedAt).append('\n')
         }
         out.writeText(sb.toString())

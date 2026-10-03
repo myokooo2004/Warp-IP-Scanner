@@ -72,11 +72,12 @@ class BackupFragment : Fragment() {
     }
 
     private fun buildCsv(): String {
-        val sb = StringBuilder("ip,port,latency_ms,saved_at\n")
+        val sb = StringBuilder("ip,port,latency_ms,jitter_ms,saved_at\n")
         for (e in entries) {
             sb.append(e.ip).append(',')
                 .append(e.port).append(',')
                 .append(e.ms ?: "").append(',')
+                .append(e.jitterMs ?: "").append(',')
                 .append(e.savedAt).append('\n')
         }
         return sb.toString()

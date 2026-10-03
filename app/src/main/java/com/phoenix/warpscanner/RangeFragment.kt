@@ -69,7 +69,7 @@ class RangeFragment : Fragment() {
                     if (ScanHelper.isStable(r)) {
                         BackupStore.add(
                             requireContext(),
-                            BackupEntry(r.ip, r.port, r.latencyMs, System.currentTimeMillis())
+                            BackupEntry(ip = r.ip, port = r.port, ms = r.latencyMs, jitterMs = r.jitterMs, savedAt = System.currentTimeMillis())
                         )
                         added++
                         activity?.runOnUiThread {

@@ -28,6 +28,7 @@ class ResultsAdapter(
     class VH(v: View) : RecyclerView.ViewHolder(v) {
         val rank: TextView = v.findViewById(R.id.tvRank)
         val ip: TextView = v.findViewById(R.id.tvIp)
+        val tag: TextView = v.findViewById(R.id.tvTag)
         val ms: TextView = v.findViewById(R.id.tvMs)
         val copy: Button = v.findViewById(R.id.btnCopy)
         val range: Button = v.findViewById(R.id.btnRange)
@@ -43,6 +44,15 @@ class ResultsAdapter(
         val ctx = h.itemView.context
         h.rank.text = (pos + 1).toString()
         h.ip.text = r.endpoint
+        val tags = mutableListOf<String>()
+        if (!ScanHelper.isListed(r.ip)) tags.add("UNLISTED")
+        if (r.jitterMs != null) tags.add("±${r.jitterMs}ms")
+        if (tags.isEmpty()) {
+            h.tag.visibility = View.GONE
+        } else {
+            h.tag.visibility = View.VISIBLE
+            h.tag.text = tags.joinToString(" · ")
+        }
         val ms = r.latencyMs
         h.ms.text = if (ms != null) "$ms ms" else "? ms"
         h.ms.setBackgroundColor(
