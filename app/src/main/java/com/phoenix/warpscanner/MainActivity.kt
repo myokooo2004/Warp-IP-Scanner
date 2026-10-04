@@ -16,6 +16,7 @@ class MainActivity : AppCompatActivity() {
             val f: Fragment = when (item.itemId) {
                 R.id.nav_range -> RangeFragment()
                 R.id.nav_backup -> BackupFragment()
+                R.id.nav_stable -> StableFragment()
                 else -> ScanFragment()
             }
             supportFragmentManager.beginTransaction().replace(R.id.container, f).commit()

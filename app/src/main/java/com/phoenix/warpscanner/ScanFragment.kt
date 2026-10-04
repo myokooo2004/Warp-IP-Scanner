@@ -231,7 +231,7 @@ class ScanFragment : Fragment() {
                 done++
                 verifiedNow.add(r.endpoint)
                 val isNew = vm.add(r)
-                EndpointHistoryStore.recordVerified(ctx, r.endpoint, r.latencyMs, r.jitterMs)
+                EndpointHistoryStore.recordStableResult(ctx, r.endpoint, r.latencyMs, r.jitterMs, alive = true)
                 BackupStore.add(
                     ctx,
                     BackupEntry(ip = r.ip, port = r.port, ms = r.latencyMs, jitterMs = r.jitterMs, savedAt = System.currentTimeMillis())
@@ -252,7 +252,7 @@ class ScanFragment : Fragment() {
                     if (ok && !cancelled) {
                         for (c in pick) {
                             if (c.endpoint !in verifiedNow) {
-                                EndpointHistoryStore.recordDead(ctx, c.endpoint)
+                                EndpointHistoryStore.recordStableResult(ctx, c.endpoint, null, null, alive = false)
                             }
                         }
                     }

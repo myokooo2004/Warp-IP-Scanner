@@ -83,6 +83,27 @@ object ScanHelper {
         )
 
     /**
+     * Stable-tab rank for re-verified Backup endpoints (lower is better):
+     *  1. proven-stable tier first ([EndpointHistoryStore.PROVEN_GOOD]+ past
+     *     successes — persistence beats one lucky scan),
+     *  2. unlisted before listed (block-resistance),
+     *  3. then ms + jitter (stability),
+     *  4. then IP as a stable tiebreak.
+     */
+    fun stableRanked(
+        results: List<ScanResult>,
+        goodCount: (String) -> Int
+    ): List<ScanResult> =
+        results.sortedWith(
+            compareBy(
+                { if (goodCount(it.endpoint) >= EndpointHistoryStore.PROVEN_GOOD) 0 else 1 },
+                { if (isListed(it.ip)) 1 else 0 },
+                { (it.latencyMs ?: Long.MAX_VALUE) + (it.jitterMs ?: 0L) },
+                { it.ip }
+            )
+        )
+
+    /**
      * /24 diversity: at most one endpoint per /24 in the final list, so a
      * single /24 block cannot wipe out every verified endpoint. Takes the
      * best-ranked endpoint of each /24, then the top [n].
