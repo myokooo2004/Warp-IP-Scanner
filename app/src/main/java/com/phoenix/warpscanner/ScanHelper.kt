@@ -114,6 +114,9 @@ object ScanHelper {
         "--count", "300",
         "--ports", portsCsv,
         "--target", target.toString(),
+        // Premium-smooth: capped concurrency keeps CPU/battery low and the
+        // UI responsive; the scan just takes a little longer.
+        "--concurrency", "16",
         "--network-profile", "blocked"
     )
 
@@ -139,6 +142,8 @@ object ScanHelper {
         args += listOf(
             "--ports", portsCsv,
             "--target", target.toString(),
+            // Premium-smooth: capped concurrency, same as quick scan.
+            "--concurrency", "16",
             "--network-profile", "blocked"
         )
         return args

@@ -1,6 +1,7 @@
 package com.phoenix.warpscanner
 
 import android.content.Context
+import android.os.PowerManager
 import org.json.JSONObject
 import java.io.File
 
@@ -40,6 +41,23 @@ class ScanEngine(private val ctx: Context) {
     }
 
     /**
+     * PARTIAL_WAKE_LOCK held for the whole scan. The scanner runs as a
+     * background subprocess while the screen may be off — without this,
+     * Doze can stall the CPU mid-scan and corrupt latency/jitter.
+     * Released in the thread's finally, even on cancel/failure.
+     */
+    private fun acquireScanWakeLock(): PowerManager.WakeLock? {
+        return try {
+            val pm = ctx.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "WarpScanner:ScanWakeLock")
+                ?.apply {
+                    setReferenceCounted(false)
+                    acquire(15 * 60 * 1000L)
+                }
+        } catch (_: Exception) { null }
+    }
+
+    /**
      * @param args engine CLI args, e.g. ["scan","--mode","warp","--count","300",...]
      * Callbacks are invoked on background threads; post to the UI thread yourself.
      */
@@ -51,6 +69,7 @@ class ScanEngine(private val ctx: Context) {
     ) {
         running = true
         Thread {
+            val wakeLock = acquireScanWakeLock()
             try {
                 val bin = ensureBinary()
                 val cmd = mutableListOf(bin.absolutePath).apply { addAll(args) }
@@ -97,6 +116,8 @@ class ScanEngine(private val ctx: Context) {
             } catch (e: Exception) {
                 running = false
                 onDone(false, e.message ?: "unknown error")
+            } finally {
+                try { if (wakeLock?.isHeld == true) wakeLock.release() } catch (_: Exception) {}
             }
         }.start()
     }
