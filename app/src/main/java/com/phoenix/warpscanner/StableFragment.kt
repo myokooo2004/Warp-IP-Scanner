@@ -7,10 +7,12 @@ import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.InputType
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -92,6 +94,7 @@ class StableFragment : Fragment() {
         }
         btnCopyAll.setOnClickListener { copyAll() }
         btnPublish.setOnClickListener { publishTop10() }
+        v.findViewById<TextView>(R.id.btnSettings).setOnClickListener { showSettingsDialog() }
         tvDead.setOnClickListener { toggleDead() }
     }
 
@@ -278,8 +281,9 @@ class StableFragment : Fragment() {
 
     /**
      * Publish the currently displayed top-10 as a JSON document for the
-     * companion VPN app: scrollable monospace preview in a dialog, then
-     * copy to clipboard for a manual paste into endpoints.json on GitHub.
+     * companion VPN app. When a GitHub token is saved in Settings the JSON
+     * is pushed directly to endpoints.json on GitHub; otherwise it falls
+     * back to the v1.9 manual flow (scrollable preview + copy to clipboard).
      */
     private fun publishTop10() {
         if (lastTop.isEmpty()) {
@@ -287,6 +291,37 @@ class StableFragment : Fragment() {
             return
         }
         val json = buildPublishJson()
+        val token = try {
+            TokenStore.getToken(requireContext())
+        } catch (_: Exception) {
+            null
+        }
+        if (token == null) {
+            showCopyDialog(json)
+            return
+        }
+        // Auto-push off the main thread; the token never leaves this scope
+        // except inside the Authorization header, and is never logged.
+        btnPublish.isEnabled = false
+        btnPublish.text = "Publishing…"
+        Thread {
+            val result = GitHubPush.push(token, json)
+            activity?.runOnUiThread {
+                btnPublish.isEnabled = true
+                btnPublish.text = "⧉ PUBLISH"
+                when (result) {
+                    is GitHubPush.Result.Ok -> toast("Published to GitHub ✅")
+                    is GitHubPush.Result.Err -> {
+                        toast("Push failed: ${result.reason}")
+                        showCopyDialog(json)
+                    }
+                }
+            }
+        }.start()
+    }
+
+    /** Manual fallback: scrollable monospace preview, then copy to clipboard. */
+    private fun showCopyDialog(json: String) {
         val tv = TextView(requireContext()).apply {
             text = json
             typeface = Typeface.MONOSPACE
@@ -302,6 +337,60 @@ class StableFragment : Fragment() {
                 val cm = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 cm.setPrimaryClip(ClipData.newPlainText("stable_top10", json))
                 toast("Copied — paste into endpoints.json on GitHub")
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    /**
+     * Settings dialog: GitHub token (PAT) for auto-push. The token value
+     * is never displayed after entry — only set/unset state is shown.
+     */
+    private fun showSettingsDialog() {
+        val ctx = requireContext()
+        val isSet = try {
+            TokenStore.hasToken(ctx)
+        } catch (_: Exception) {
+            false
+        }
+        val layout = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 8)
+        }
+        val tvState = TextView(ctx).apply {
+            text = "GitHub token: " + if (isSet) "set ✓" else "not set"
+            textSize = 14f
+            setPadding(0, 0, 0, 16)
+        }
+        val et = EditText(ctx).apply {
+            hint = "Paste PAT here"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val tvHint = TextView(ctx).apply {
+            text = "Fine-grained PAT, Warp-IP-Scanner repo only, Contents read/write.\n" +
+                "Create at github.com/settings/tokens"
+            textSize = 12f
+            setTextColor(resources.getColor(R.color.gray, null))
+            setPadding(0, 16, 0, 0)
+        }
+        layout.addView(tvState)
+        layout.addView(et)
+        layout.addView(tvHint)
+        AlertDialog.Builder(ctx)
+            .setTitle("Settings")
+            .setView(layout)
+            .setPositiveButton("Save") { _, _ ->
+                val t = et.text.toString().trim()
+                if (t.isEmpty()) {
+                    toast("Token is empty")
+                } else {
+                    TokenStore.setToken(ctx, t)
+                    toast("Token saved")
+                }
+            }
+            .setNeutralButton("Clear") { _, _ ->
+                TokenStore.clearToken(ctx)
+                toast("Token cleared")
             }
             .setNegativeButton("Close", null)
             .show()
