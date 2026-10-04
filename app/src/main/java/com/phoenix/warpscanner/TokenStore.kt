@@ -3,7 +3,7 @@ package com.phoenix.warpscanner
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import androidx.security.crypto.MasterKeys
 
 /**
  * Stores the GitHub personal access token (PAT) used by the Stable tab's
@@ -16,13 +16,12 @@ object TokenStore {
     private const val KEY_TOKEN = "github_pat"
 
     private fun prefs(ctx: Context): SharedPreferences {
-        val masterKey = MasterKey.Builder(ctx, MasterKey.DEFAULT_MASTER_KEY_ALIAS)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+        // security-crypto 1.0.0 API: MasterKeys (plural) + String alias.
+        val alias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
         return EncryptedSharedPreferences.create(
-            ctx,
             FILE,
-            masterKey,
+            alias,
+            ctx,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
