@@ -307,13 +307,17 @@ class StableFragment : Fragment() {
         Thread {
             val result = GitHubPush.push(token, json)
             activity?.runOnUiThread {
-                btnPublish.isEnabled = true
-                btnPublish.text = "⧉ PUBLISH"
+                try {
+                    btnPublish.isEnabled = true
+                    btnPublish.text = "⧉ PUBLISH"
+                } catch (_: Exception) { /* view gone */ }
                 when (result) {
                     is GitHubPush.Result.Ok -> toast("Published to GitHub ✅")
                     is GitHubPush.Result.Err -> {
                         toast("Push failed: ${result.reason}")
-                        showCopyDialog(json)
+                        try {
+                            showCopyDialog(json)
+                        } catch (_: Exception) { /* view gone */ }
                     }
                 }
             }
