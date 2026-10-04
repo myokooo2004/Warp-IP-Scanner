@@ -89,6 +89,16 @@
             android:textColor="@color/accent"
             android:textSize="13sp"
             android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnPublish"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:backgroundTint="@color/bg"
+            android:text="⧉ PUBLISH"
+            android:textColor="@color/accent"
+            android:textSize="13sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <TextView

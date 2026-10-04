@@ -3,6 +3,7 @@ package com.phoenix.warpscanner
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -12,11 +13,19 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import org.json.JSONArray
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Stable tab: re-verifies every Backup IP (0% loss + WireGuard handshake)
@@ -32,6 +41,7 @@ class StableFragment : Fragment() {
     private lateinit var adapter: StableAdapter
     private lateinit var btnScan: Button
     private lateinit var btnCopyAll: Button
+    private lateinit var btnPublish: Button
     private lateinit var progress: ProgressBar
     private lateinit var tvStatus: TextView
     private lateinit var rowHead: LinearLayout
@@ -65,6 +75,7 @@ class StableFragment : Fragment() {
 
         btnScan = v.findViewById(R.id.btnStableScan)
         btnCopyAll = v.findViewById(R.id.btnCopyAll)
+        btnPublish = v.findViewById(R.id.btnPublish)
         progress = v.findViewById(R.id.pbStable)
         tvStatus = v.findViewById(R.id.tvStableStatus)
         rowHead = v.findViewById(R.id.rowStableHead)
@@ -80,6 +91,7 @@ class StableFragment : Fragment() {
             }
         }
         btnCopyAll.setOnClickListener { copyAll() }
+        btnPublish.setOnClickListener { publishTop10() }
         tvDead.setOnClickListener { toggleDead() }
     }
 
@@ -262,5 +274,56 @@ class StableFragment : Fragment() {
         btnCopyAll.text = "✓ COPIED"
         toast("${lastTop.size} endpoints copy ကူးပြီးပြီ")
         Handler(Looper.getMainLooper()).postDelayed({ btnCopyAll.text = "⧉ COPY ALL" }, 1500)
+    }
+
+    /**
+     * Publish the currently displayed top-10 as a JSON document for the
+     * companion VPN app: scrollable monospace preview in a dialog, then
+     * copy to clipboard for a manual paste into endpoints.json on GitHub.
+     */
+    private fun publishTop10() {
+        if (lastTop.isEmpty()) {
+            toast("Run a Stable scan first")
+            return
+        }
+        val json = buildPublishJson()
+        val tv = TextView(requireContext()).apply {
+            text = json
+            typeface = Typeface.MONOSPACE
+            textSize = 12f
+            setPadding(32, 20, 32, 20)
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(requireContext()).apply { addView(tv) }
+        AlertDialog.Builder(requireContext())
+            .setTitle("Publish top ${lastTop.size}")
+            .setView(scroll)
+            .setPositiveButton("Copy JSON") { _, _ ->
+                val cm = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("stable_top10", json))
+                toast("Copied — paste into endpoints.json on GitHub")
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun buildPublishJson(): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+        sdf.timeZone = TimeZone.getTimeZone("UTC")
+        val eps = JSONArray()
+        for (r in lastTop.take(10)) {
+            eps.put(JSONObject().apply {
+                put("ip", r.ip)
+                put("port", r.port)
+                put("ms", r.latencyMs ?: 0L)
+                if (r.jitterMs != null) put("jitter_ms", r.jitterMs) else put("jitter_ms", JSONObject.NULL)
+            })
+        }
+        return JSONObject().apply {
+            put("v", 1)
+            put("updated_at", sdf.format(Date()))
+            put("isp", "MPT")
+            put("endpoints", eps)
+        }.toString(2)
     }
 }
