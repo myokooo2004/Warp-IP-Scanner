@@ -17,6 +17,14 @@ class ScanViewModel : ViewModel() {
     /** True once the user manually edits the Range tab CIDR field. */
     var rangeCidrsManual: Boolean = false
 
+    /**
+     * Deep-link from the Stable tab: "explore this winner's /24".
+     * When set, the Range tab pre-fills CIDR+port and auto-starts on open.
+     * Consumed (cleared) by RangeFragment.
+     */
+    var pendingExploreCidr: String? = null
+    var pendingExplorePort: String? = null
+
     /** @return true if this endpoint is new */
     fun add(r: ScanResult): Boolean {
         if (!seen.add(r.endpoint)) return false

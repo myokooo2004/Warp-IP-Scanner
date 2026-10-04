@@ -52,10 +52,13 @@ class StableFragment : Fragment() {
 
     override fun onViewCreated(v: View, s: Bundle?) {
         engine = ScanEngine(requireContext())
-        adapter = StableAdapter(goodCount = {
-            try { EndpointHistoryStore.goodCount(requireContext(), it) }
-            catch (_: Exception) { 0 }
-        })
+        adapter = StableAdapter(
+            goodCount = {
+                try { EndpointHistoryStore.goodCount(requireContext(), it) }
+                catch (_: Exception) { 0 }
+            },
+            onExplore = { exploreRange(it) }
+        )
         rv = v.findViewById(R.id.rvStable)
         rv.layoutManager = LinearLayoutManager(requireContext())
         rv.adapter = adapter
@@ -229,6 +232,23 @@ class StableFragment : Fragment() {
     private fun toggleDead() {
         deadExpanded = !deadExpanded
         updateDeadSection(lastDead.size, lastRemoved)
+    }
+
+    /**
+     * "Explore this winner's /24": deep-link into the Range tab with the
+     * endpoint's /24 + port pre-filled, auto-starting the neighbor scan.
+     */
+    private fun exploreRange(r: ScanResult) {
+        val vm = androidx.lifecycle.ViewModelProvider(requireActivity())[ScanViewModel::class.java]
+        vm.pendingExploreCidr = ScanHelper.cidr24(r.ip)
+        vm.pendingExplorePort = r.port.toString()
+        try {
+            requireActivity()
+                .findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.bottomNav)
+                .selectedItemId = R.id.nav_range
+        } catch (_: Exception) {
+            toast("Could not open Range tab")
+        }
     }
 
     private fun copyAll() {

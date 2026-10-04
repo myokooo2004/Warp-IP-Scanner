@@ -19,7 +19,8 @@ import androidx.recyclerview.widget.RecyclerView
  * per-row copy. Row tap also copies (consistent with the Backup tab).
  */
 class StableAdapter(
-    private val goodCount: (String) -> Int
+    private val goodCount: (String) -> Int,
+    private val onExplore: (ScanResult) -> Unit
 ) : RecyclerView.Adapter<StableAdapter.VH>() {
 
     var items: List<ScanResult> = emptyList()
@@ -73,6 +74,8 @@ class StableAdapter(
         h.copy.text = "⧉"
         h.copy.setOnClickListener { copyEndpoint(ctx, r.endpoint, h.copy) }
         h.itemView.setOnClickListener { copyEndpoint(ctx, r.endpoint, h.copy) }
-        h.range.visibility = View.GONE
+        // "/24" explores this winner's neighborhood in the Range tab.
+        h.range.visibility = View.VISIBLE
+        h.range.setOnClickListener { onExplore(r) }
     }
 }

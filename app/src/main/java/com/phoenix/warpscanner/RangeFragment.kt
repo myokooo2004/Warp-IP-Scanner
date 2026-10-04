@@ -42,6 +42,21 @@ class RangeFragment : Fragment() {
         refreshCidrField()
         etPorts.setText("500")
 
+        // Deep-link from the Stable tab ("explore this winner's /24"):
+        // pre-fill CIDR + port and auto-start the neighbor scan.
+        val exploreCidr = vm.pendingExploreCidr
+        if (exploreCidr != null) {
+            vm.pendingExploreCidr = null
+            val explorePort = vm.pendingExplorePort ?: "500"
+            vm.pendingExplorePort = null
+            programmaticCidr = true
+            etCidrs.setText(exploreCidr)
+            programmaticCidr = false
+            etPorts.setText(explorePort)
+            toast("Exploring ${exploreCidr}…")
+            etCidrs.post { btnScan.performClick() }
+        }
+
         // Manual edits take ownership of the field: auto-fill stops touching it.
         etCidrs.doAfterTextChanged {
             if (!programmaticCidr) vm.rangeCidrsManual = true
