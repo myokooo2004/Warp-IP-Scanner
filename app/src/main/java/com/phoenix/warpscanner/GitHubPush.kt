@@ -3,6 +3,7 @@ package com.phoenix.warpscanner
 import android.util.Base64
 import org.json.JSONObject
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 
 /**
@@ -22,11 +23,17 @@ object GitHubPush {
     }
 
     fun push(token: String, json: String): Result {
-        return try {
-            val sha = getSha(token) // null when the file doesn't exist yet
-            put(token, json, sha)
-        } catch (e: Exception) {
-            Result.Err(e.message ?: "network error")
+        // One retry on timeout — mobile networks stall transiently.
+        var attempt = 0
+        while (true) {
+            try {
+                val sha = getSha(token) // null when the file doesn't exist yet
+                return put(token, json, sha)
+            } catch (e: SocketTimeoutException) {
+                if (++attempt >= 2) return Result.Err("timed out — check connection")
+            } catch (e: Exception) {
+                return Result.Err(e.message ?: "network error")
+            }
         }
     }
 
@@ -36,8 +43,8 @@ object GitHubPush {
             requestMethod = "GET"
             setRequestProperty("Authorization", "Bearer $token")
             setRequestProperty("Accept", "application/vnd.github+json")
-            connectTimeout = 15000
-            readTimeout = 15000
+            connectTimeout = 30000
+            readTimeout = 60000
         }
         try {
             return when (c.responseCode) {
@@ -58,8 +65,8 @@ object GitHubPush {
             setRequestProperty("Authorization", "Bearer $token")
             setRequestProperty("Accept", "application/vnd.github+json")
             setRequestProperty("Content-Type", "application/json")
-            connectTimeout = 15000
-            readTimeout = 15000
+            connectTimeout = 30000
+            readTimeout = 60000
         }
         try {
             val body = JSONObject().apply {
