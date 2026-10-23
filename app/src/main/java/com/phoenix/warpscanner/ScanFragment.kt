@@ -37,6 +37,12 @@ import androidx.recyclerview.widget.RecyclerView
  * "Verified (0)" for minutes on a slow line. The census itself is
  * unchanged: every part of 162.159.192.0/24 is still probed, in
  * address order, until N is met.
+ *
+ * v1.16: strikes are per-pass only. A candidate that fails 3 draws
+ * yields its slot for the rest of the pass and is retried on the next
+ * pass; the greyed "verify failed" list is computed once at the end
+ * of the run (with its single dead-record) — draws fail, endpoints
+ * don't (user principle 2026-10-24).
  */
 class ScanFragment : Fragment() {
 
@@ -216,6 +222,9 @@ class ScanFragment : Fragment() {
         if (cancelled) return
         rangeDraws++
         chunkIndex = 0
+        // Fresh pass, fresh draws: strike counts reset, so candidates
+        // that yielded their slot last pass are retried (v1.16).
+        triedDraws.clear()
         runNextChunk()
     }
 
@@ -351,12 +360,12 @@ class ScanFragment : Fragment() {
                     }
                     for (c in working) {
                         if (c.endpoint !in verifiedSet) {
-                            val t = (triedDraws[c.endpoint] ?: 0) + 1
-                            triedDraws[c.endpoint] = t
-                            if (t >= MAX_VERIFY_DRAWS) {
-                                failedList.add(c)
-                                EndpointHistoryStore.recordStableResult(ctx, c.endpoint, null, null, alive = false)
-                            }
+                            // v1.16: a strike only yields the slot for
+                            // THIS pass — draws fail, endpoints don't.
+                            // The candidate stays retryable on the next
+                            // pass (strikes reset there) and is never
+                            // failed-listed or buried mid-run.
+                            triedDraws[c.endpoint] = (triedDraws[c.endpoint] ?: 0) + 1
                         }
                     }
                     refreshResults()
@@ -377,6 +386,15 @@ class ScanFragment : Fragment() {
     /** Final bookkeeping + the funnel status line. */
     private fun finishScan(ok: Boolean, err: String?) {
         val ctx = requireContext()
+        // Run report (v1.16): candidates that never verified in ANY
+        // pass are shown greyed — a report of this run, not a death
+        // sentence. The dead-record is written once, only now, after
+        // every pass had its draws.
+        failedList.clear()
+        failedList.addAll(rankedCache.filter { it.endpoint !in verifiedSet })
+        for (c in failedList) {
+            EndpointHistoryStore.recordStableResult(ctx, c.endpoint, null, null, alive = false)
+        }
         // Final order: staged rank with history tiebreak — best on top.
         vm.sortStaged { EndpointHistoryStore.goodCount(ctx, it) }
         refreshResults()
