@@ -25,6 +25,9 @@ class ResultsAdapter(
     var items: List<ScanResult> = emptyList()
         set(v) { field = v; notifyDataSetChanged() }
 
+    /** Endpoints that exhausted their verify draws this run — rendered greyed. */
+    var failedEndpoints: Set<String> = emptySet()
+
     class VH(v: View) : RecyclerView.ViewHolder(v) {
         val rank: TextView = v.findViewById(R.id.tvRank)
         val ip: TextView = v.findViewById(R.id.tvIp)
@@ -42,11 +45,18 @@ class ResultsAdapter(
     override fun onBindViewHolder(h: VH, pos: Int) {
         val r = items[pos]
         val ctx = h.itemView.context
+        val failed = r.endpoint in failedEndpoints
         h.rank.text = (pos + 1).toString()
+        h.rank.alpha = if (failed) 0.45f else 1f
         h.ip.text = r.endpoint
+        h.ip.alpha = if (failed) 0.45f else 1f
         val tags = mutableListOf<String>()
-        if (!ScanHelper.isListed(r.ip)) tags.add("UNLISTED")
-        if (r.jitterMs != null) tags.add("±${r.jitterMs}ms")
+        if (failed) {
+            tags.add("verify failed")
+        } else {
+            if (!ScanHelper.isListed(r.ip)) tags.add("UNLISTED")
+            if (r.jitterMs != null) tags.add("±${r.jitterMs}ms")
+        }
         if (tags.isEmpty()) {
             h.tag.visibility = View.GONE
         } else {
@@ -54,7 +64,7 @@ class ResultsAdapter(
             h.tag.text = tags.joinToString(" · ")
         }
         val ms = r.latencyMs
-        h.ms.text = if (ms != null) "$ms ms" else "? ms"
+        h.ms.text = if (failed) "✗ failed" else if (ms != null) "$ms ms" else "? ms"
         h.ms.setBackgroundColor(
             when {
                 ms == null -> Color.parseColor("#3A3A3E")
@@ -74,5 +84,8 @@ class ResultsAdapter(
         }
 
         h.range.setOnClickListener { onNeighborScan(r) }
+
+        h.copy.visibility = if (failed) View.GONE else View.VISIBLE
+        h.range.visibility = if (failed) View.GONE else View.VISIBLE
     }
 }
