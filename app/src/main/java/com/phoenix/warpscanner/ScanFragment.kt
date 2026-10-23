@@ -30,6 +30,13 @@ import androidx.recyclerview.widget.RecyclerView
  * engine draws (refill, up to 3). The final status line is the funnel:
  * probed / candidates / verified / failed counts.
  * No log box: a single status line shows the current stage.
+ *
+ * v1.15: the census runs as 8 sequential /27 parts and candidates are
+ * verified AS THEY ARRIVE (after each part), instead of probing all
+ * 254 hosts before the first verify — the v1.14 order showed
+ * "Verified (0)" for minutes on a slow line. The census itself is
+ * unchanged: every part of 162.159.192.0/24 is still probed, in
+ * address order, until N is met.
  */
 class ScanFragment : Fragment() {
 
@@ -55,6 +62,7 @@ class ScanFragment : Fragment() {
     private var rankedCache: List<ScanResult> = emptyList()
     private var refillsLeft = 0
     private var rangeDraws = 0
+    private var chunkIndex = 0
 
     /** Set while the user pressed Stop; prevents phase 2 from starting. */
     @Volatile private var cancelled = false
@@ -65,6 +73,14 @@ class ScanFragment : Fragment() {
         const val MAX_REFILLS = 3
         const val MAX_VERIFY_DRAWS = 3
         const val RANGE_HOSTS = 254
+        const val CHUNK_HOSTS = 32
+
+        /** The front /24 in address order, probed part by part (v1.15). */
+        val CHUNKS = listOf(
+            "162.159.192.0/27", "162.159.192.32/27", "162.159.192.64/27",
+            "162.159.192.96/27", "162.159.192.128/27", "162.159.192.160/27",
+            "162.159.192.192/27", "162.159.192.224/27"
+        )
     }
 
     private val pickConf = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -188,17 +204,30 @@ class ScanFragment : Fragment() {
     }
 
     /**
-     * One full enumeration draw over 162.159.192.0/24 (fresh engine
-     * process = fresh sockets/flows). Stable (0%-loss) answers join the
-     * candidate pool; the first draw feeds ranking + verify, later
-     * draws are refills when the pool ran dry before N verified.
+     * One enumeration pass over 162.159.192.0/24, probed part by part
+     * (8 × /27, address order). Each part is a fresh engine process
+     * (fresh sockets/flows); stable (0%-loss) answers join the
+     * candidate pool and are verified as soon as their part lands —
+     * the census still covers the whole range, but the first verified
+     * result no longer waits for all 254 hosts. Later passes are
+     * refills when the pool ran dry before N verified.
      */
     private fun runRangeDraw() {
         if (cancelled) return
         rangeDraws++
-        setStatus("Probing 162.159.192.0/24 · draw $rangeDraws…")
+        chunkIndex = 0
+        runNextChunk()
+    }
+
+    /** Probe the current /27 part, then rank + verify what it yielded. */
+    private fun runNextChunk() {
+        if (cancelled) return
+        setStatus(
+            "Probing 162.159.192.0/24 · part ${chunkIndex + 1}/${CHUNKS.size} · " +
+                "draw $rangeDraws · ${pool.size} candidates · verified ${verifiedSet.size}/$scanN…"
+        )
         engine.scan(
-            ScanHelper.rangeScanArgs(ScanHelper.frontCidrsCsv, selectedPorts(), RANGE_HOSTS),
+            ScanHelper.rangeScanArgs(CHUNKS[chunkIndex], selectedPorts(), CHUNK_HOSTS),
             onResult = { r ->
                 if (ScanHelper.isStable(r)) {
                     synchronized(pool) {
@@ -219,6 +248,23 @@ class ScanFragment : Fragment() {
                 }
             }
         )
+    }
+
+    /**
+     * The pool ran dry before N: continue the census with the next
+     * part; when every part is probed, refill with a fresh pass
+     * (bounded by MAX_REFILLS); otherwise finish.
+     */
+    private fun continueDraw() {
+        if (chunkIndex < CHUNKS.size - 1) {
+            chunkIndex++
+            runNextChunk()
+        } else if (refillsLeft > 0) {
+            refillsLeft--
+            runRangeDraw()
+        } else {
+            finishScan(ok = true, err = null)
+        }
     }
 
     /** Rank the candidate pool (front range exempt from known-dead burial). */
@@ -260,12 +306,7 @@ class ScanFragment : Fragment() {
                 (triedDraws[it.endpoint] ?: 0) < MAX_VERIFY_DRAWS
         }.take(need)
         if (working.isEmpty()) {
-            if (refillsLeft > 0) {
-                refillsLeft--
-                runRangeDraw()
-            } else {
-                finishScan(ok = true, err = null)
-            }
+            continueDraw()
             return
         }
         verifyBatch(working)
