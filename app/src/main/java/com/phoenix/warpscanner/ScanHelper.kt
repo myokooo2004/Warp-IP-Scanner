@@ -67,6 +67,9 @@ object ScanHelper {
         "162.159.192.0/24"
     )
 
+    /** CSV of the promoted front ranges, for the Scan tab's dedicated pass. */
+    val frontCidrsCsv: String get() = FRONT_CIDRS.joinToString(",")
+
     /**
      * Ranking tier (lower is better), user decision 2026-10-23:
      *  0 = 162.159.192.0/24 only (193 is NOT included),
