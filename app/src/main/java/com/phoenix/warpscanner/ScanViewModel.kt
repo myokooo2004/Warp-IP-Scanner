@@ -31,7 +31,7 @@ class ScanViewModel : ViewModel() {
         results.add(r)
         results.sortWith(
             compareBy(
-                { if (ScanHelper.isListed(it.ip)) 1 else 0 },
+                { ScanHelper.rangeTier(it.ip) },
                 { (it.latencyMs ?: Long.MAX_VALUE) + (it.jitterMs ?: 0L) },
                 { it.ip }
             )

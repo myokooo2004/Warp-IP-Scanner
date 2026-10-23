@@ -62,9 +62,27 @@ object ScanHelper {
     /** True when the IP sits inside a publicly-listed WARP range. */
     fun isListed(ip: String): Boolean = LISTED_WARP_CIDRS.any { cidrContains(it, ip) }
 
+    /** The single range promoted to the front for this ranking experiment. */
+    private val FRONT_CIDRS = listOf(
+        "162.159.192.0/24"
+    )
+
+    /**
+     * Ranking tier (lower is better), user decision 2026-10-23:
+     *  0 = 162.159.192.0/24 only (193 is NOT included),
+     *  1 = unlisted ranges (e.g. 8.x),
+     *  2 = every other listed range (162.159.193.0/24, 188.114.96-99.0/24).
+     */
+    fun rangeTier(ip: String): Int = when {
+        FRONT_CIDRS.any { cidrContains(it, ip) } -> 0
+        isListed(ip) -> 2
+        else -> 1
+    }
+
     /**
      * Staged rank for the one-tap pipeline (lower is better):
-     *  1. unlisted before listed (block-resistance),
+     *  1. range tier (see [rangeTier]: 162.159.192.0/24 first, unlisted
+     *     second, other listed last),
      *  2. then ms + jitter (stability),
      *  3. then past success count (proven endpoints win ties),
      *  4. then IP as a stable tiebreak.
@@ -75,7 +93,7 @@ object ScanHelper {
     ): List<ScanResult> =
         candidates.sortedWith(
             compareBy(
-                { if (isListed(it.ip)) 1 else 0 },
+                { rangeTier(it.ip) },
                 { (it.latencyMs ?: Long.MAX_VALUE) + (it.jitterMs ?: 0L) },
                 { -goodCount(it.endpoint) },
                 { it.ip }
@@ -84,9 +102,10 @@ object ScanHelper {
 
     /**
      * Stable-tab rank for re-verified Backup endpoints (lower is better):
-     *  1. proven-stable tier first ([EndpointHistoryStore.PROVEN_GOOD]+ past
+     *  1. range tier (see [rangeTier]: 162.159.192.0/24 at the very top —
+     *     user decision 2026-10-23, above even the proven tier),
+     *  2. proven-stable tier ([EndpointHistoryStore.PROVEN_GOOD]+ past
      *     successes — persistence beats one lucky scan),
-     *  2. unlisted before listed (block-resistance),
      *  3. then ms + jitter (stability),
      *  4. then IP as a stable tiebreak.
      */
@@ -96,8 +115,8 @@ object ScanHelper {
     ): List<ScanResult> =
         results.sortedWith(
             compareBy(
+                { rangeTier(it.ip) },
                 { if (goodCount(it.endpoint) >= EndpointHistoryStore.PROVEN_GOOD) 0 else 1 },
-                { if (isListed(it.ip)) 1 else 0 },
                 { (it.latencyMs ?: Long.MAX_VALUE) + (it.jitterMs ?: 0L) },
                 { it.ip }
             )
