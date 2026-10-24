@@ -54,6 +54,18 @@ class StableFragment : Fragment() {
     @Volatile private var cancelled = false
     private var running = false
 
+    // Multi-draw re-verify (v1.17): a Backup IP is only "dead" for the
+    // run after failing every round — each round is a fresh engine
+    // process (fresh flows) for the IPs that have not passed yet.
+    private var round = 0
+    private var roundBackup: List<BackupEntry> = emptyList()
+    private var roundAlive: MutableList<ScanResult> =
+        java.util.Collections.synchronizedList(mutableListOf())
+
+    companion object {
+        private const val MAX_VERIFY_ROUNDS = 3
+    }
+
     private var lastTop: List<ScanResult> = emptyList()
     private var lastDead: List<String> = emptyList()
     private var lastRemoved: Int = 0
@@ -133,23 +145,59 @@ class StableFragment : Fragment() {
         tvStatus.text = "Re-verifying 0/${backup.size}…"
 
         val targets = backup.map { ScanResult(it.ip, it.port, null, 0) }
-        val alive = java.util.Collections.synchronizedList(mutableListOf<ScanResult>())
-        val confPath = WgConfStore.path(ctx)
+        roundBackup = backup
+        roundAlive = java.util.Collections.synchronizedList(mutableListOf())
+        round = 1
+        runRound(targets)
+    }
+
+    /**
+     * One verify round: a fresh engine process (fresh flows) over
+     * [targets]. IPs that pass join [roundAlive]; the failures are
+     * re-drawn in the next round, up to [MAX_VERIFY_ROUNDS] rounds.
+     * An IP is alive for the run if ANY round passes it — a failed
+     * draw says something about the flow, not the endpoint.
+     */
+    private fun runRound(targets: List<ScanResult>) {
+        val confPath = WgConfStore.path(requireContext())
         engine.scan(
             ScanHelper.verifyArgs(targets, confPath),
             onResult = { r ->
-                alive.add(r)
+                roundAlive.add(r)
                 activity?.runOnUiThread {
                     if (cancelled) return@runOnUiThread
-                    progress.progress = alive.size
-                    tvStatus.text = "Re-verifying ${alive.size}/${targets.size}…"
+                    progress.progress = roundAlive.size
+                    val base = "Re-verifying ${roundAlive.size}/${roundBackup.size}…"
+                    tvStatus.text =
+                        if (round > 1) "$base · round $round/$MAX_VERIFY_ROUNDS" else base
                 }
             },
             onProgress = {},
             onDone = { ok, err ->
                 // Capture the activity reference: the fragment may be gone.
-                val act = activity
-                act?.runOnUiThread { finish(act, ok, err, backup, alive.toList()) }
+                val act = activity ?: return@scan
+                if (cancelled || !ok) {
+                    act.runOnUiThread {
+                        finish(act, ok, err, roundBackup, roundAlive.toList())
+                    }
+                    return@scan
+                }
+                val passed = roundAlive.map { it.endpoint }.toSet()
+                val remaining = targets.filter { it.endpoint !in passed }
+                if (remaining.isEmpty() || round >= MAX_VERIFY_ROUNDS) {
+                    act.runOnUiThread {
+                        finish(act, true, null, roundBackup, roundAlive.toList())
+                    }
+                } else {
+                    round++
+                    act.runOnUiThread {
+                        if (!cancelled) {
+                            tvStatus.text =
+                                "Round $round/$MAX_VERIFY_ROUNDS — re-drawing ${remaining.size}…"
+                        }
+                    }
+                    if (!cancelled) runRound(remaining)
+                }
             }
         )
     }
